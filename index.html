@@ -1,24 +1,223 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Transaction Monitoring Dashboard</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Payment Gateway Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #1e293b;
+      --text: #f1f5f9;
+      --primary: #38bdf8;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    header {
+      background: var(--panel);
+      padding: 20px;
+      text-align: center;
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: var(--primary);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+    .container {
+      max-width: 1200px;
+      margin: auto;
+      padding: 30px 20px;
+    }
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      margin-bottom: 40px;
+    }
+    .card {
+      background: var(--panel);
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.15);
+      transition: 0.3s;
+    }
+    .card:hover {
+      background: #273449;
+      transform: translateY(-2px);
+    }
+    .card h3 {
+      font-size: 0.9rem;
+      color: #94a3b8;
+      margin-bottom: 8px;
+    }
+    .card p {
+      font-size: 1.3rem;
+      font-weight: 600;
+    }
+    canvas {
+      background: var(--panel);
+      border-radius: 10px;
+      padding: 15px;
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.1);
+      margin-bottom: 40px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--panel);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    th, td {
+      padding: 15px;
+      text-align: left;
+      border-bottom: 1px solid #334155;
+    }
+    th {
+      background: #1e293b;
+      color: #94a3b8;
+      font-weight: 600;
+    }
+    td.status-success {
+      color: #22c55e;
+    }
+    td.status-failed {
+      color: #ef4444;
+    }
+  </style>
 </head>
 <body>
-  <h1>📊 Real-Time Transaction Monitoring</h1>
-  <div class="dashboard">
-    <div class="kpi" id="total-txns">Total Transactions: 0</div>
-    <div class="kpi" id="success-txns">Successful: 0</div>
-    <div class="kpi" id="failed-txns">Failed: 0</div>
-    <div class="kpi" id="total-amount">Total Amount: ₹0</div>
+  <header>🧾 Payment Gateway Transaction Dashboard</header>
+  <div class="container">
+    <div class="kpi-grid">
+      <div class="card">
+        <h3>Total Transactions</h3>
+        <p id="total-txns">0</p>
+      </div>
+      <div class="card">
+        <h3>Successful</h3>
+        <p id="success-txns">0</p>
+      </div>
+      <div class="card">
+        <h3>Failed</h3>
+        <p id="failed-txns">0</p>
+      </div>
+      <div class="card">
+        <h3>Total Amount</h3>
+        <p id="total-amount">₹0</p>
+      </div>
+    </div>
+
+    <canvas id="txnChart" height="100"></canvas>
+
+    <h2 style="margin: 30px 0 10px;">Recent Transactions</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Amount</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="txn-table-body"></tbody>
+    </table>
   </div>
 
-  <canvas id="txnChart" height="100"></canvas>
+  <script>
+    let txnData = [];
+    let totalAmount = 0;
+    let successCount = 0;
+    let failCount = 0;
 
-  <script src="data.js"></script>
-  <script src="script.js"></script>
+    const chart = new Chart(document.getElementById('txnChart'), {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{
+          label: 'Successful Transaction Amount (₹)',
+          data: [],
+          borderColor: '#38bdf8',
+          borderWidth: 2,
+          tension: 0.3,
+          fill: false
+        }]
+      },
+      options: {
+        animation: false,
+        responsive: true,
+        scales: {
+          x: {
+            ticks: { color: "#cbd5e1" },
+            title: { display: true, text: 'Time', color: "#cbd5e1" }
+          },
+          y: {
+            ticks: { color: "#cbd5e1" },
+            title: { display: true, text: 'Amount (₹)', color: "#cbd5e1" }
+          }
+        },
+        plugins: {
+          legend: {
+            labels: {
+              color: "#cbd5e1"
+            }
+          }
+        }
+      }
+    });
+
+    function updateDashboard(txn) {
+      txnData.unshift(txn);
+      if (txn.status === 'success') {
+        totalAmount += txn.amount;
+        successCount++;
+        chart.data.labels.push(txn.time);
+        chart.data.datasets[0].data.push(txn.amount);
+      } else {
+        failCount++;
+      }
+
+      if (chart.data.labels.length > 20) {
+        chart.data.labels.shift();
+        chart.data.datasets[0].data.shift();
+      }
+
+      document.getElementById('total-txns').innerText = txnData.length;
+      document.getElementById('success-txns').innerText = successCount;
+      document.getElementById('failed-txns').innerText = failCount;
+      document.getElementById('total-amount').innerText = `₹${totalAmount.toFixed(2)}`;
+
+      const tableBody = document.getElementById('txn-table-body');
+      tableBody.innerHTML = txnData.slice(0, 10).map(t => `
+        <tr>
+          <td>${t.time}</td>
+          <td>₹${t.amount}</td>
+          <td class="status-${t.status}">${t.status.toUpperCase()}</td>
+        </tr>
+      `).join('');
+
+      chart.update();
+    }
+
+    function simulateTransaction() {
+      const isSuccess = Math.random() > 0.3;
+      const txn = {
+        time: new Date().toLocaleTimeString(),
+        amount: isSuccess ? parseFloat((Math.random() * 1000 + 100).toFixed(2)) : 0,
+        status: isSuccess ? 'success' : 'failed'
+      };
+      updateDashboard(txn);
+    }
+
+    setInterval(simulateTransaction, 3000);
+  </script>
 </body>
 </html>
